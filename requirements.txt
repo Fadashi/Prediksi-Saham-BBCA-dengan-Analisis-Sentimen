@@ -1,0 +1,14 @@
+streamlit
+pandas
+numpy
+yfinance
+requests
+Sastrawi
+nltk
+wordcloud
+scikit-learn
+torch
+matplotlib
+plotly
+pyyaml
+python-dotenv

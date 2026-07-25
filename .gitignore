@@ -1,0 +1,23 @@
+# Ignore raw uncompressed jsonl over 100MB
+data/raw/*.jsonl
+!data/raw/*.jsonl.gz
+
+# Python Cache & Env
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+.env
+
+# Streamlit & IDE
+.streamlit/secrets.toml
+.vscode/
+.idea/
+*.log
+
+# Windows System
+Thumbs.db
+ehthumbs.db
+Desktop.ini

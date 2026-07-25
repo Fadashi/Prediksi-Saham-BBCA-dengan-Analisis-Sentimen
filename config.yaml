@@ -1,0 +1,33 @@
+symbol: BBCA
+price_ticker: BBCA.JK
+
+period:
+  price_start: "2016-01-01"
+  sentiment_start: "2021-01-01"
+  end: "2026-07-23"
+
+sentiment:
+  classes: 2 # 2 (buang netral) atau 3 kelas
+  lexicon_urls:
+    positive: "https://raw.githubusercontent.com/fajri91/InSet/master/positive.tsv"
+    negative: "https://raw.githubusercontent.com/fajri91/InSet/master/negative.tsv"
+
+
+features:
+  lookback: 30
+  technical:
+    - close
+    - open
+    - high
+    - low
+    - volume
+    - ma5
+    - ma20
+    - rsi
+    - return
+
+split:
+  train: 0.80
+  test: 0.20
+
+seed: 42

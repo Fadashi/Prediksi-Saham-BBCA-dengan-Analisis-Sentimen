@@ -1,0 +1,6 @@
+{
+  "model_name": "LSTM",
+  "scenario": "S2",
+  "config": "K3",
+  "mape": 2.237681611222764
+}
