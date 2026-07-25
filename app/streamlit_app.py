@@ -354,6 +354,11 @@ def load_scored_stream_posts():
     posts = load_stream_posts()
     if not posts:
         return pd.DataFrame()
+
+    # Efisiensi RAM Server Cloud (Streamlit Cloud RAM limit 1GB)
+    if len(posts) > 20000:
+        posts = posts[-20000:]
+
     df_posts = pd.DataFrame(posts)
 
     # 1. Deduplikasi (Hapus ID & Teks Duplikat)
@@ -398,7 +403,10 @@ def load_raw_stream_posts_df():
     posts = load_stream_posts()
     if not posts:
         return pd.DataFrame()
+    if len(posts) > 25000:
+        posts = posts[-25000:]
     return pd.DataFrame(posts)
+
 
 
 
