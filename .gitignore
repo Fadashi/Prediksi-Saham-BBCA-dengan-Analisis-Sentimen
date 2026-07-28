@@ -21,3 +21,8 @@ venv/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# Skripsi Documents
+*.docx
+*.pdf
+

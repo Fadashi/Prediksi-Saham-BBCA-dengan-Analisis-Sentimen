@@ -349,14 +349,19 @@ def load_stream_posts():
 
 
 
+# Deteksi Lingkungan Eksekusi (Lokal vs Streamlit Cloud Server)
+IS_STREAMLIT_CLOUD = Path("/mount/src").exists()
+
+
 @st.cache_data
 def load_scored_stream_posts():
     posts = load_stream_posts()
     if not posts:
         return pd.DataFrame()
 
-    # Efisiensi RAM Server Cloud (Streamlit Cloud RAM limit 1GB)
-    if len(posts) > 20000:
+    # Saat berjalan di Lokal: Gunakan 100% SELURUH DATA UTUH tanpa pembatasan.
+    # Saat berjalan di Cloud Server: Batasi sampel jika melebihi batas RAM 1GB server gratis.
+    if IS_STREAMLIT_CLOUD and len(posts) > 20000:
         posts = posts[-20000:]
 
     df_posts = pd.DataFrame(posts)
@@ -403,9 +408,10 @@ def load_raw_stream_posts_df():
     posts = load_stream_posts()
     if not posts:
         return pd.DataFrame()
-    if len(posts) > 25000:
+    if IS_STREAMLIT_CLOUD and len(posts) > 25000:
         posts = posts[-25000:]
     return pd.DataFrame(posts)
+
 
 
 
