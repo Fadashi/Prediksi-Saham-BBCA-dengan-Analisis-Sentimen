@@ -33,6 +33,7 @@ if str(BASE_DIR) not in sys.path:
 import joblib
 from src.config import (
     CONFIG,
+    INTERIM_DATA_DIR,
     METRICS_DIR,
     MODELS_DIR,
     PROCESSED_DATA_DIR,
@@ -348,14 +349,13 @@ def load_stream_posts():
     return posts
 @st.cache_data
 def load_scored_stream_posts():
+    scored_path = INTERIM_DATA_DIR / "scored_posts.csv.gz"
+    if scored_path.exists():
+        return pd.read_csv(scored_path)
+
     posts = load_stream_posts()
     if not posts:
         return pd.DataFrame()
-
-    # Sampling proporsional dan merata dari 2021-2026 agar RAM & CPU efisien di cloud
-    if len(posts) > 15000:
-        step = len(posts) // 15000
-        posts = posts[::step]
 
     df_posts = pd.DataFrame(posts)
 
@@ -401,9 +401,6 @@ def load_raw_stream_posts_df():
     posts = load_stream_posts()
     if not posts:
         return pd.DataFrame()
-    if len(posts) > 20000:
-        step = len(posts) // 20000
-        posts = posts[::step]
     return pd.DataFrame(posts)
 
 
@@ -491,21 +488,13 @@ def load_selected_model_and_scalers(
 
 @st.cache_data
 def load_all_word_frequencies():
-    posts = load_stream_posts()
-    if not posts:
+    df_scored = load_scored_stream_posts()
+    if df_scored.empty or "cleaned_content" not in df_scored.columns:
         return {}, {}, {}
 
-    # Sampling proporsional dari 2021-2026 agar WordCloud tidak memakan RAM berlebih di cloud
-    if len(posts) > 12000:
-        step = len(posts) // 12000
-        posts = posts[::step]
-
     from collections import Counter
-    from src.sentiment.lexicon_scorer import InSetLexiconScorer
-    from src.sentiment.preprocess_text import INDONESIAN_STOPWORDS, preprocess_text_full
+    from src.sentiment.preprocess_text import INDONESIAN_STOPWORDS
 
-    scorer = InSetLexiconScorer()
-    
     custom_stopwords = set(INDONESIAN_STOPWORDS) | {
         "bbca", "saham", "ini", "yang", "akan", "ada", "dan", "di", "ke", "dari", "pada",
         "untuk", "bisa", "banyak", "lagi", "saya", "kamu", "anda", "dengan", "atau",
@@ -517,21 +506,16 @@ def load_all_word_frequencies():
     counts_pos = Counter()
     counts_neg = Counter()
 
-    for p in posts:
-        content = str(p.get("content", ""))
-        cleaned = preprocess_text_full(content)
-        if not cleaned:
-            continue
+    for cleaned, label_val in zip(df_scored["cleaned_content"], df_scored["sentiment_label"]):
+        cleaned_str = str(cleaned)
+        label_str = str(label_val)
 
-        score_res = scorer.score_text(cleaned)
-        label = score_res["label"]
-
-        words = [w for w in cleaned.split() if w not in custom_stopwords and len(w) > 2]
+        words = [w for w in cleaned_str.split() if w not in custom_stopwords and len(w) > 2]
         
         counts_all.update(words)
-        if label == 1:
+        if "Positif" in label_str or label_str == "1":
             counts_pos.update(words)
-        elif label == -1:
+        elif "Negatif" in label_str or label_str == "-1":
             counts_neg.update(words)
 
     return dict(counts_all), dict(counts_pos), dict(counts_neg)
