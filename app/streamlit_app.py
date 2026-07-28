@@ -346,14 +346,16 @@ def load_stream_posts():
                     except Exception:
                         continue
     return posts
-
-
-
 @st.cache_data
 def load_scored_stream_posts():
     posts = load_stream_posts()
     if not posts:
         return pd.DataFrame()
+
+    # Sampling proporsional dan merata dari 2021-2026 agar RAM & CPU efisien di cloud
+    if len(posts) > 15000:
+        step = len(posts) // 15000
+        posts = posts[::step]
 
     df_posts = pd.DataFrame(posts)
 
@@ -399,11 +401,10 @@ def load_raw_stream_posts_df():
     posts = load_stream_posts()
     if not posts:
         return pd.DataFrame()
+    if len(posts) > 20000:
+        step = len(posts) // 20000
+        posts = posts[::step]
     return pd.DataFrame(posts)
-
-
-
-
 
 
 @st.cache_data
@@ -488,12 +489,16 @@ def load_selected_model_and_scalers(
     return regressor, feature_scaler, target_scaler
 
 
-
 @st.cache_data
 def load_all_word_frequencies():
     posts = load_stream_posts()
     if not posts:
         return {}, {}, {}
+
+    # Sampling proporsional dari 2021-2026 agar WordCloud tidak memakan RAM berlebih di cloud
+    if len(posts) > 12000:
+        step = len(posts) // 12000
+        posts = posts[::step]
 
     from collections import Counter
     from src.sentiment.lexicon_scorer import InSetLexiconScorer
@@ -530,6 +535,7 @@ def load_all_word_frequencies():
             counts_neg.update(words)
 
     return dict(counts_all), dict(counts_pos), dict(counts_neg)
+eg)
 
 
 def generate_wordcloud(sentiment_filter="All"):
