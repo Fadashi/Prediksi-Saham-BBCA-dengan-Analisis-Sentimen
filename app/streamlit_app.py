@@ -535,7 +535,6 @@ def load_all_word_frequencies():
             counts_neg.update(words)
 
     return dict(counts_all), dict(counts_pos), dict(counts_neg)
-eg)
 
 
 def generate_wordcloud(sentiment_filter="All"):
