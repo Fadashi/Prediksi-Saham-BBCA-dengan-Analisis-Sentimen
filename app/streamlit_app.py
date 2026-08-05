@@ -959,14 +959,24 @@ def main():
             if df_recent.empty:
                 df_recent = df_scored_posts.copy()
 
-            # Filter postingan berkualitas tinggi (tanpa spam singkat)
-            df_hq_posts = df_recent[
-                (df_recent["content"].astype(str).str.strip().str.len() >= 25) &
-                (~df_recent["content"].astype(str).str.match(r"^\$[A-Z\s\$]+$"))
+            # Filter postingan berkualitas tinggi & pelabelan presisi (bebas noise & mislabeled)
+            # 1. Panjang teks >= 30 karakter, bukan sekadar simbol ticker $BBCA
+            # 2. Pelabelan presisi: Positif (skor >= 1.0), Negatif (skor <= -1.0), Netral (skor murni == 0)
+            df_hq_posts = df_scored_posts[
+                (df_scored_posts["content"].astype(str).str.strip().str.len() >= 30) &
+                (~df_scored_posts["content"].astype(str).str.match(r"^\$[A-Z\s\$]+$")) &
+                (
+                    ((df_scored_posts["sentiment_label"].str.contains("Positif")) & (df_scored_posts["sentiment_score"] >= 1.0)) |
+                    ((df_scored_posts["sentiment_label"].str.contains("Negatif")) & (df_scored_posts["sentiment_score"] <= -1.0)) |
+                    ((df_scored_posts["sentiment_label"].str.contains("Netral")) & (df_scored_posts["sentiment_score"].abs() <= 0.2))
+                )
             ].copy()
 
             if df_hq_posts.empty:
-                df_hq_posts = df_recent
+                df_hq_posts = df_scored_posts.copy()
+
+            # Selalu urutkan dari postingan paling terbaru (newest first)
+            df_hq_posts = df_hq_posts.sort_values(by="dt", ascending=False)
 
             samp_col1, samp_col2 = st.columns([1, 4])
             with samp_col1:
@@ -977,47 +987,30 @@ def main():
                     index=0,
                     key="main_sample_post_filter"
                 )
-                st.caption("👈 **Geser slider ke kanan/kiri** untuk melihat postingan terbaru (5 hari terakhir) yang akurat.")
+                st.caption("👈 **Geser slider ke kanan/kiri** untuk melihat postingan.")
 
             with samp_col2:
-                # Sub-filter akurat berdasarkan label & ambang batas skor sentimen presisi
+                # Sub-filter akurat berdasarkan label terpilih (Urutan Terbaru -> Lama)
                 if sample_filter == "Positif (+1)":
                     filtered_sample_df = df_hq_posts[
-                        (df_hq_posts["sentiment_label"].str.contains("Positif")) &
-                        (df_hq_posts["sentiment_score"] >= 1.0)
-                    ].sort_values(by="created_at", ascending=False)
+                        df_hq_posts["sentiment_label"].str.contains("Positif")
+                    ].sort_values(by="dt", ascending=False)
                 elif sample_filter == "Negatif (-1)":
                     filtered_sample_df = df_hq_posts[
-                        (df_hq_posts["sentiment_label"].str.contains("Negatif")) &
-                        (df_hq_posts["sentiment_score"] <= -1.0)
-                    ].sort_values(by="created_at", ascending=False)
+                        df_hq_posts["sentiment_label"].str.contains("Negatif")
+                    ].sort_values(by="dt", ascending=False)
                 elif sample_filter == "Netral (0)":
                     filtered_sample_df = df_hq_posts[
-                        (df_hq_posts["sentiment_label"].str.contains("Netral")) &
-                        (df_hq_posts["sentiment_score"].abs() <= 0.5)
-                    ].sort_values(by="created_at", ascending=False)
+                        df_hq_posts["sentiment_label"].str.contains("Netral")
+                    ].sort_values(by="dt", ascending=False)
                 else:
-                    # Opsi "Semua Label": Ambil postingan terbaru paling akurat & selang-selingkan Positif, Negatif, Netral
-                    pos_df = df_hq_posts[(df_hq_posts["sentiment_label"].str.contains("Positif")) & (df_hq_posts["sentiment_score"] >= 1.0)].sort_values(by="created_at", ascending=False).head(7)
-                    neg_df = df_hq_posts[(df_hq_posts["sentiment_label"].str.contains("Negatif")) & (df_hq_posts["sentiment_score"] <= -1.0)].sort_values(by="created_at", ascending=False).head(7)
-                    net_df = df_hq_posts[(df_hq_posts["sentiment_label"].str.contains("Netral")) & (df_hq_posts["sentiment_score"].abs() <= 0.5)].sort_values(by="created_at", ascending=False).head(6)
-
-                    # Jika salah satu kategori sedikit pada 5 hari terakhir, fallback ke postingan terbaik terdekat
-                    if pos_df.empty: pos_df = df_hq_posts[df_hq_posts["sentiment_label"].str.contains("Positif")].sort_values(by="created_at", ascending=False).head(7)
-                    if neg_df.empty: neg_df = df_hq_posts[df_hq_posts["sentiment_label"].str.contains("Negatif")].sort_values(by="created_at", ascending=False).head(7)
-                    if net_df.empty: net_df = df_hq_posts[df_hq_posts["sentiment_label"].str.contains("Netral")].sort_values(by="created_at", ascending=False).head(6)
-
-                    mix_list = []
-                    for i in range(max(len(pos_df), len(neg_df), len(net_df))):
-                        if i < len(pos_df): mix_list.append(pos_df.iloc[i])
-                        if i < len(neg_df): mix_list.append(neg_df.iloc[i])
-                        if i < len(net_df): mix_list.append(net_df.iloc[i])
-                    filtered_sample_df = pd.DataFrame(mix_list)
+                    # Opsi "Semua Label": Tampilkan postingan terbaru yang paling presisi (Newest First)
+                    filtered_sample_df = df_hq_posts.sort_values(by="dt", ascending=False)
 
                 if filtered_sample_df.empty:
-                    filtered_sample_df = df_hq_posts.sort_values(by="created_at", ascending=False)
+                    filtered_sample_df = df_scored_posts.sort_values(by="dt", ascending=False)
 
-                top_sample_posts = filtered_sample_df.head(20).to_dict(orient="records")
+                top_sample_posts = filtered_sample_df.head(25).to_dict(orient="records")
 
 
 
