@@ -1,0 +1,5 @@
+Kelas Sentimen,Polarisasi Lexicon,Jumlah Postingan,Persentase Proporsi (%)
+Positif (+1),Skor Polarisasi > 0,64848,54.4%
+Negatif (-1),Skor Polarisasi < 0,35396,29.7%
+Netral (0),Skor Polarisasi = 0,19048,15.9%
+TOTAL BERSIH,Seluruh Postingan Valid,119292,100.0%

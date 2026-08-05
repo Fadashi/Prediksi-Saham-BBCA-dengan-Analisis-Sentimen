@@ -64,7 +64,7 @@ class StockCNN(nn.Module):
         self.fc = nn.Linear(hidden_dim * sequence_length, 1)
 
     def forward(self, x):
-        x = x.transpose(1, 2)
+        x = x.transpose(1, 2).contiguous()
         out = self.conv1(x)
         out = self.relu1(out)
         out = self.dropout1(out)
@@ -94,10 +94,10 @@ class PyTorchSeqRegressor:
         set_seed(seed)
         self.model_name = model_name.upper()
         self.lr = lr
-        self.device = torch.device("cpu")
-
-
-
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if torch.cuda.is_available():
+            torch.backends.cudnn.benchmark = True
+            torch.backends.cudnn.deterministic = False
 
         if self.model_name == "LSTM":
             self.net = StockLSTM(input_dim=input_dim, hidden_dim=hidden_dim, dropout_rate=dropout_rate).to(self.device)
@@ -117,6 +117,26 @@ class PyTorchSeqRegressor:
         )
 
     def fit(
+        self,
+        X_train: np.ndarray,
+        y_train: np.ndarray,
+        X_val: np.ndarray = None,
+        y_val: np.ndarray = None,
+        epochs: int = 150,
+        batch_size: int = 16,
+        patience: int = 15,
+    ):
+        try:
+            return self._fit_impl(X_train, y_train, X_val, y_val, epochs, batch_size, patience)
+        except RuntimeError as e:
+            if "unable to find an engine" in str(e).lower() or "cudnn" in str(e).lower() or "engine" in str(e).lower():
+                print(f"[Device Fallback] Engine issue encountered for {self.model_name}. Switching to CPU for this run...")
+                self.device = torch.device("cpu")
+                self.net = self.net.to(self.device)
+                return self._fit_impl(X_train, y_train, X_val, y_val, epochs, batch_size, patience)
+            raise e
+
+    def _fit_impl(
         self,
         X_train: np.ndarray,
         y_train: np.ndarray,
@@ -200,33 +220,48 @@ class PyTorchSeqRegressor:
     def from_file(
         cls,
         filepath: Path,
-        input_dim: int,
+        input_dim: int = None,
         seq_len: int = 30,
-        hidden_dim: int = 64,
+        hidden_dim: int = None,
         seed: int = 42,
     ):
-        """Memuat model secara otomatis mendeteksi arsitektur (StockLSTM, StockGRU, StockCNN) dari state_dict."""
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        state_dict = torch.load(filepath, map_location=device)
+        """Memuat model secara otomatis mendeteksi arsitektur, input_dim, dan hidden_dim dari state_dict."""
+        try:
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            state_dict = torch.load(filepath, map_location=device)
+        except Exception:
+            device = torch.device("cpu")
+            state_dict = torch.load(filepath, map_location=device)
 
         if any(k.startswith("gru") for k in state_dict.keys()):
             model_name = "GRU"
+            detected_input_dim = state_dict["gru1.weight_ih_l0"].shape[1]
+            detected_hidden_dim = state_dict["fc.weight"].shape[1]
         elif any(k.startswith("conv") for k in state_dict.keys()):
             model_name = "CNN"
+            detected_input_dim = state_dict["conv1.weight"].shape[1]
+            detected_hidden_dim = state_dict["conv1.weight"].shape[0]
         else:
             model_name = "LSTM"
+            detected_input_dim = state_dict["lstm1.weight_ih_l0"].shape[1]
+            detected_hidden_dim = state_dict["fc.weight"].shape[1]
+
+        final_input_dim = input_dim if input_dim is not None else detected_input_dim
+        final_hidden_dim = hidden_dim if hidden_dim is not None else detected_hidden_dim
+
+        # Jika ada potensi size mismatch dengan input_dim yang diberikan, utamakan dimensi dari checkpoint
+        if input_dim is not None and input_dim != detected_input_dim:
+            final_input_dim = detected_input_dim
 
         regressor = cls(
             model_name=model_name,
-            input_dim=input_dim,
+            input_dim=final_input_dim,
             seq_len=seq_len,
-            hidden_dim=hidden_dim,
+            hidden_dim=final_hidden_dim,
             seed=seed,
         )
-        try:
-            regressor.net.load_state_dict(state_dict)
-        except RuntimeError:
-            regressor.net.load_state_dict(state_dict, strict=False)
+        regressor.net.load_state_dict(state_dict)
+        return regressor
 
         return regressor
 

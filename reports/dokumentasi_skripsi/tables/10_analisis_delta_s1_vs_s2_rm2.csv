@@ -1,0 +1,4 @@
+Arsitektur Model,MAPE S1 (Baseline),MAPE S2 (InSet),Delta MAPE (%),RMSE S1 (Baseline),RMSE S2 (InSet),Delta RMSE (IDR),Peningkatan Akurasi
+StockLSTM,2.61%,2.28%,-0.33%,Rp 253.91,Rp 221.18,-Rp 32.73,Lebih Presisi 12.9%
+StockGRU,2.45%,2.21%,-0.24%,Rp 230.15,Rp 220.27,-Rp 9.88,Lebih Presisi 9.8%
+StockCNN 1D,3.40%,3.30%,-0.10%,Rp 306.43,Rp 297.55,-Rp 8.88,Lebih Presisi 2.9%

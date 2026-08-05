@@ -1,0 +1,6 @@
+Tahap,Sebelum Preprocessing (Input Mentah),Sesudah Preprocessing (Output Bersih)
+Tahap 1: Text Cleaning,$BBCA dividen jumbo tahun ini mantap bangett!! https://t.co/xyz123,dividen jumbo tahun ini mantap bangett
+Tahap 2: Case Folding,"IHSG lagi Korsek, Tapi BBCA Tetap KOKOH!",ihsg lagi korsek tapi bbca tetap kokoh
+Tahap 3: Stopwords Removal,saham yang sangat bagus untuk investasi jangka panjang,saham bagus investasi jangka panjang
+Tahap 4: Nazief & Adriani Stemming,perusahaan melakukan pembalikan tren kenaikan,usaha laku balik tren naik
+Tahap 5: Scoring InSet Lexicon,saham bagus investasi jangka panjang,Score: +4.0 -> Label: Positif (+1)

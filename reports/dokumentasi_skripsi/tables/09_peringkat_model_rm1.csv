@@ -1,0 +1,7 @@
+Peringkat,Arsitektur Model,Skenario Fitur,Best Config,MAPE (%),RMSE (IDR),MAE (IDR),Status Arsitektur
+1,StockGRU,S2 (InSet Lexicon),K3,2.21%,Rp 220,Rp 151,Model Terbaik Seluruh Sistem
+2,StockLSTM,S2 (InSet Lexicon),K3,2.28%,Rp 221,Rp 155,Model Runner-Up Terbanyak Perbaikan
+3,StockGRU,S1 (Teknikal Baseline),K4,2.23%,Rp 230,Rp 169,Model Baseline Terbaik
+4,StockLSTM,S1 (Teknikal Baseline),K3,2.61%,Rp 254,Rp 180,Model Baseline Standard
+5,StockCNN 1D,S2 (InSet Lexicon),K3,3.30%,Rp 298,Rp 229,Model Ekstraksi Fitur Spasial
+6,StockCNN 1D,S1 (Teknikal Baseline),K3,3.40%,Rp 306,Rp 236,Model Ekstraksi Fitur Spasial

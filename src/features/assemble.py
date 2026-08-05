@@ -4,6 +4,7 @@ S1: ["Close", "Open", "High", "Low", "Volume", "MA5", "MA20", "RSI", "Return"]
 S2: ["Close", "Open", "High", "Low", "Volume", "MA5", "MA20", "RSI", "Return", "sentiment_score", "positive_ratio", "negative_ratio", "discussion_volume"]
 """
 
+from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
@@ -51,20 +52,37 @@ def prepare_scenario_data(
 ):
     """Menyiapkan data (X_train, y_train, X_test, y_test) sesuai fungsi SplitData notebook."""
     train_ratio = train_ratio or CONFIG.get("split", {}).get("train", 0.80)
-    dataset_path = dataset_path or (PROCESSED_DATA_DIR / "dataset_final.csv")
+    
+    if dataset_path is None:
+        if scenario.upper() == "S3":
+            dataset_path = PROCESSED_DATA_DIR / "dataset_final_indobert.csv"
+        else:
+            dataset_path = PROCESSED_DATA_DIR / "dataset_final.csv"
+            
+    dataset_path = Path(dataset_path)
     if not dataset_path.exists():
-        build_final_dataset(output_file=dataset_path)
+        if scenario.upper() == "S3":
+            build_final_dataset(
+                sentiment_file=INTERIM_DATA_DIR / "daily_sentiment_indobert.csv",
+                output_file=dataset_path
+            )
+        else:
+            build_final_dataset(output_file=dataset_path)
 
     df = pd.read_csv(dataset_path)
 
+    df_features = df.copy()
+    if "discussion_volume" in df_features.columns:
+        df_features["discussion_volume"] = np.log1p(df_features["discussion_volume"].fillna(0))
+
     if scenario.upper() == "S1":
         feature_cols = TECHNICAL_FEATURES
-    elif scenario.upper() == "S2":
+    elif scenario.upper() in ["S2", "S3"]:
         feature_cols = TECHNICAL_FEATURES + SENTIMENT_FEATURES
     else:
-        raise ValueError(f"Skenario {scenario} tidak dikenal. Gunakan 'S1' atau 'S2'.")
+        raise ValueError(f"Skenario {scenario} tidak dikenal. Gunakan 'S1', 'S2', atau 'S3'.")
 
-    features = df[feature_cols].values
+    features = df_features[feature_cols].values
     target = df[["Target"]].values
 
     n_total = len(df)

@@ -1,0 +1,3 @@
+Sumber Data,Tipe Data,Periode Data,Jumlah Baris,Daftar Fitur / Kolom Utama
+Forum Komunitas Stockbit ($BBCA),Teks Unstructured (Postingan Ritel),31 Des 2020 - 28 Mar 2026,"119,292 Postingan","id, created_at, content, cleaned_content, sentiment_score, sentiment_label, likes"
+Harga Historis Saham BEI (BBCA.JK),Structured Time Series (OHLCV),04 Jan 2021 - 27 Mar 2026,"1,336 Hari Bursa","Date, Open, High, Low, Close, Volume, SMA_20, SMA_50, RSI, MACD, Target"

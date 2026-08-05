@@ -1,0 +1,6 @@
+Konfigurasi,Hidden Units / Filters,Dropout Rate,Learning Rate,Batch Size,Epochs
+K1,32,0.1,0.005,16,50
+K2,64,0.2,0.001,32,100
+K3,64,0.2,0.001,16,150
+K4,128,0.3,0.0005,16,100
+K5,64,0.5,0.005,32,200

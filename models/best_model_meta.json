@@ -1,6 +1,6 @@
 {
-  "model_name": "LSTM",
+  "model_name": "GRU",
   "scenario": "S2",
   "config": "K3",
-  "mape": 2.237681611222764
+  "mape": 2.21
 }

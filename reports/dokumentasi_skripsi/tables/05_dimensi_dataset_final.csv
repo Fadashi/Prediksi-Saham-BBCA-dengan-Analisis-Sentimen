@@ -1,0 +1,3 @@
+Skenario Pemodelan,Rasio Train:Test,Jumlah Baris Train,Jumlah Baris Test,Jumlah Fitur (Input Dim),Rincian Nama Fitur
+Skenario S1 (Teknikal Baseline),80% : 20%,"1,038 Hari",268 Hari,9,"Open, High, Low, Close, Volume, MA20, MA5, Return, RSI"
+Skenario S2 (InSet Lexicon),80% : 20%,"1,038 Hari",268 Hari,13,"9 Fitur Teknikal + sentiment_score, positive_ratio, negative_ratio, discussion_volume"

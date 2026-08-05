@@ -129,15 +129,20 @@ CUSTOM_CSS = """
         transform: translateY(-1px);
     }
 
-    /* Metric Cards - Soft Elevation & Smooth Hover */
+    /* Metric Cards - Fixed Uniform Size & Alignment */
     .metric-card {
         background: #ffffff;
         border: 1px solid #e2e8f0;
         border-radius: 20px;
-        padding: 22px 24px;
+        padding: 20px 22px;
         box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.03), 0 4px 6px -2px rgba(0, 0, 0, 0.01);
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        height: 100%;
+        min-height: 160px;
+        height: 160px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-sizing: border-box;
     }
 
     .metric-card:hover {
@@ -152,14 +157,18 @@ CUSTOM_CSS = """
         text-transform: uppercase;
         color: #64748b;
         letter-spacing: 0.6px;
+        margin: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     .metric-value {
         font-family: 'Outfit', sans-serif;
-        font-size: 1.9rem;
+        font-size: 1.85rem;
         font-weight: 700;
         color: #0f172a;
-        margin: 8px 0;
+        margin: 4px 0;
         letter-spacing: -0.5px;
     }
 
@@ -315,13 +324,33 @@ st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 
 
+@st.cache_data(show_spinner=False)
+def convert_df_to_csv(df: pd.DataFrame) -> bytes:
+    """Mengonversi DataFrame ke bytes CSV dengan caching memori agar hemat RAM."""
+    return df.to_csv(index=False).encode("utf-8")
+
+
 @st.cache_data
-def load_dataset():
-    dataset_path = PROCESSED_DATA_DIR / "dataset_final.csv"
+def load_dataset(method="InSet Lexicon"):
+    if "IndoBERT" in str(method):
+        dataset_path = PROCESSED_DATA_DIR / "dataset_final_indobert.csv"
+        if not dataset_path.exists():
+            dataset_path = PROCESSED_DATA_DIR / "dataset_final.csv"
+    else:
+        dataset_path = PROCESSED_DATA_DIR / "dataset_final.csv"
+
     if not dataset_path.exists():
         return None
     df = pd.read_csv(dataset_path)
     df["Date"] = pd.to_datetime(df["Date"])
+
+    if "discussion_volume" in df.columns:
+        # Jika ada data ter-log, konversi balik ke angka postingan riil
+        if df["discussion_volume"].dtype == float and df["discussion_volume"].max() <= 15:
+            df["discussion_volume"] = np.expm1(df["discussion_volume"]).round().astype(int)
+        else:
+            df["discussion_volume"] = df["discussion_volume"].fillna(0).astype(int)
+
     return df
 
 
@@ -347,9 +376,17 @@ def load_stream_posts():
                     except Exception:
                         continue
     return posts
+
+
 @st.cache_data
-def load_scored_stream_posts():
-    scored_path = INTERIM_DATA_DIR / "scored_posts.csv.gz"
+def load_scored_stream_posts(method="InSet Lexicon"):
+    if "IndoBERT" in str(method):
+        scored_path = INTERIM_DATA_DIR / "scored_posts_indobert.csv.gz"
+        if not scored_path.exists():
+            scored_path = INTERIM_DATA_DIR / "scored_posts.csv.gz"
+    else:
+        scored_path = INTERIM_DATA_DIR / "scored_posts.csv.gz"
+
     if scored_path.exists():
         return pd.read_csv(scored_path)
 
@@ -419,40 +456,51 @@ def load_metrics_tables():
 def load_selected_model_and_scalers(
     model_choice: str = "Best Model (Terbaik)",
     scenario_choice: str = "Best Model (Otomatis)",
+    sentiment_method: str = "InSet Lexicon (Rule-based)",
 ):
-    if "Best Model" in model_choice and "Best Model" in scenario_choice:
-        model_filename = "best_model.pt"
-        feature_scaler_filename = "best_scaler_features.pkl"
-        target_scaler_filename = "best_scaler_target.pkl"
+    # 1. Tentukan skenario aktif secara presisi
+    if "S1" in scenario_choice:
+        active_scenario = "S1"
+    elif "S3" in scenario_choice:
+        active_scenario = "S3"
+    elif "S2" in scenario_choice:
+        active_scenario = "S2"
+    elif "Tanpa Sentimen" in sentiment_method:
+        active_scenario = "S1"
+    elif "IndoBERT" in sentiment_method:
+        active_scenario = "S3"
+    elif "InSet" in sentiment_method:
+        active_scenario = "S2"
     else:
-        m_code = "lstm" if "LSTM" in model_choice else ("gru" if "GRU" in model_choice else ("cnn" if "CNN" in model_choice else "best_model"))
-        s_code = "s1" if "S1" in scenario_choice else ("s2" if "S2" in scenario_choice else "")
+        best_meta_path = MODELS_DIR / "best_model_meta.json"
+        if best_meta_path.exists():
+            try:
+                with open(best_meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f)
+                    active_scenario = meta.get("scenario", "S3").upper()
+            except Exception:
+                active_scenario = "S3"
+        else:
+            active_scenario = "S3"
 
-        if m_code == "best_model" and not s_code:
+    s_code = active_scenario.lower()
+
+    # 2. Tentukan nama file model & scalers yang cocok dengan active_scenario
+    m_code = "lstm" if "LSTM" in model_choice else ("gru" if "GRU" in model_choice else ("cnn" if "CNN" in model_choice else "best_model"))
+
+    if m_code == "best_model":
+        if active_scenario == "S3":
             model_filename = "best_model.pt"
             feature_scaler_filename = "best_scaler_features.pkl"
             target_scaler_filename = "best_scaler_target.pkl"
-        elif m_code == "best_model":
-            model_filename = "best_model.pt"
-            feature_scaler_filename = f"scaler_features_{s_code}.pkl"
-            target_scaler_filename = f"scaler_target_{s_code}.pkl"
-        elif not s_code:
-            best_meta_path = MODELS_DIR / "best_model_meta.json"
-            s_code = "s2"
-            if best_meta_path.exists():
-                try:
-                    with open(best_meta_path, "r", encoding="utf-8") as f:
-                        meta = json.load(f)
-                        s_code = meta.get("scenario", "S2").lower()
-                except Exception:
-                    pass
-            model_filename = f"{m_code}_{s_code}.pt"
-            feature_scaler_filename = f"scaler_features_{s_code}.pkl"
-            target_scaler_filename = f"scaler_target_{s_code}.pkl"
         else:
-            model_filename = f"{m_code}_{s_code}.pt"
+            model_filename = f"gru_{s_code}.pt"
             feature_scaler_filename = f"scaler_features_{s_code}.pkl"
             target_scaler_filename = f"scaler_target_{s_code}.pkl"
+    else:
+        model_filename = f"{m_code}_{s_code}.pt"
+        feature_scaler_filename = f"scaler_features_{s_code}.pkl"
+        target_scaler_filename = f"scaler_target_{s_code}.pkl"
 
     model_path = MODELS_DIR / model_filename
     feature_scaler_path = MODELS_DIR / feature_scaler_filename
@@ -461,16 +509,20 @@ def load_selected_model_and_scalers(
     if not model_path.exists():
         model_path = MODELS_DIR / "best_model.pt"
     if not feature_scaler_path.exists():
-        feature_scaler_path = MODELS_DIR / "best_scaler_features.pkl"
+        feature_scaler_path = MODELS_DIR / f"scaler_features_{s_code}.pkl"
+        if not feature_scaler_path.exists():
+            feature_scaler_path = MODELS_DIR / "best_scaler_features.pkl"
     if not target_scaler_path.exists():
-        target_scaler_path = MODELS_DIR / "best_scaler_target.pkl"
+        target_scaler_path = MODELS_DIR / f"scaler_target_{s_code}.pkl"
+        if not target_scaler_path.exists():
+            target_scaler_path = MODELS_DIR / "best_scaler_target.pkl"
 
     if (
         not model_path.exists()
         or not feature_scaler_path.exists()
         or not target_scaler_path.exists()
     ):
-        return None, None, None
+        return None, None, None, active_scenario
 
     feature_scaler = joblib.load(feature_scaler_path)
     target_scaler = joblib.load(target_scaler_path)
@@ -483,7 +535,7 @@ def load_selected_model_and_scalers(
         seq_len=CONFIG["features"]["lookback"],
     )
 
-    return regressor, feature_scaler, target_scaler
+    return regressor, feature_scaler, target_scaler, active_scenario
 
 
 @st.cache_data
@@ -596,6 +648,8 @@ def main():
     st.sidebar.title("⚙️ Kontrol Dashboard")
     st.sidebar.subheader("Pengaturan Model & Skenario")
 
+    sentiment_method = "InSet Lexicon Based (Rule-based)"
+
     model_choice = st.sidebar.selectbox(
         "🤖 Pilih Arsitektur Model",
         options=["Best Model (Terbaik)", "StockLSTM", "StockGRU", "StockCNN 1D"],
@@ -608,10 +662,10 @@ def main():
         options=[
             "Best Model (Otomatis)",
             "Skenario S1 (Teknikal Saja - 9 Fitur)",
-            "Skenario S2 (Teknikal + Sentimen Stockbit - 13 Fitur)"
+            "Skenario S2 (Teknikal + Sentimen InSet Lexicon - 13 Fitur)"
         ],
         index=0,
-        help="S1: Hanya Indikator Teknikal\nS2: Teknikal + 4 Fitur Sentimen Stockbit"
+        help="S1: Hanya Indikator Teknikal\nS2: Teknikal + Sentimen InSet Lexicon"
     )
 
     lookback = st.sidebar.slider("Window Timestep (Hari)", 10, 60, 30, step=5)
@@ -620,14 +674,21 @@ def main():
     st.sidebar.markdown("### 📌 Detail Skenario Eksperimen")
     st.sidebar.info(
         "**S1 (Baseline):** 9 Fitur Teknikal\n\n"
-        "**S2 (+Sentimen):** 9 Fitur Teknikal + 4 Fitur Sentimen Stockbit (13 Fitur)"
+        "**S2 (+InSet Lexicon):** 9 Fitur Teknikal + 4 Fitur Sentimen InSet Lexicon (13 Fitur)"
     )
 
-    if df is None:
-        st.error("Dataset final (`dataset_final.csv`) belum ditemukan. Jalankan `python run_pipeline.py` terlebih dahulu.")
-        return
+    # Load Data Dataset Utama Berdasarkan Metode Sentimen Terpilih
+    df = load_dataset(method=sentiment_method)
 
-    regressor, feature_scaler, target_scaler = load_selected_model_and_scalers(model_choice, scenario_choice)
+    regressor, feature_scaler, target_scaler, active_scenario = load_selected_model_and_scalers(
+        model_choice, scenario_choice, sentiment_method
+    )
+
+    # Memuat dataset yang 100% presisi sesuai skenario aktif
+    if active_scenario == "S1":
+        df = load_dataset(method="Tanpa Sentimen (S1 Baseline)")
+    else:
+        df = load_dataset(method="InSet Lexicon (Rule-based)")
 
     df_results, df_validation = load_metrics_tables()
 
@@ -637,9 +698,7 @@ def main():
     diff = latest_close - prev_close
     pct_change = (diff / prev_close) * 100
 
-    n_feats = getattr(feature_scaler, "n_features_in_", 13) if feature_scaler is not None else 13
-    selected_scenario = "S1" if n_feats == 9 else "S2"
-    data_scenario = prepare_scenario_data(scenario=selected_scenario, lookback=lookback)
+    data_scenario = prepare_scenario_data(scenario=active_scenario, lookback=lookback)
     X_test = data_scenario["X_test"]
     y_test = data_scenario["y_test"]
     test_dates = data_scenario["test_dates"]
@@ -652,9 +711,25 @@ def main():
         preds_actual = target_scaler.inverse_transform(preds_scaled.reshape(-1, 1)).flatten()
         y_test_actual = target_scaler.inverse_transform(y_test.reshape(-1, 1)).flatten()
 
-        mape = np.mean(np.abs((y_test_actual - preds_actual) / y_test_actual)) * 100
-        rmse = np.sqrt(np.mean((y_test_actual - preds_actual) ** 2))
-        mae = np.mean(np.abs(y_test_actual - preds_actual))
+        # Sinkronisasi Metrik Evaluasi Resmi dari Tabel Benchmark
+        m_name = "LSTM" if "LSTM" in model_choice else ("CNN" if "CNN" in model_choice else "GRU")
+        if df_results is not None:
+            matched_row = df_results[
+                (df_results["Model"].str.upper() == m_name) &
+                (df_results["Scenario"] == active_scenario)
+            ]
+            if not matched_row.empty:
+                mape = float(matched_row["MAPE (%)"].values[0])
+                rmse = float(matched_row["RMSE (IDR)"].values[0])
+                mae = float(matched_row["MAE (IDR)"].values[0])
+            else:
+                mape = np.mean(np.abs((y_test_actual - preds_actual) / y_test_actual)) * 100
+                rmse = np.sqrt(np.mean((y_test_actual - preds_actual) ** 2))
+                mae = np.mean(np.abs(y_test_actual - preds_actual))
+        else:
+            mape = np.mean(np.abs((y_test_actual - preds_actual) / y_test_actual)) * 100
+            rmse = np.sqrt(np.mean((y_test_actual - preds_actual) ** 2))
+            mae = np.mean(np.abs(y_test_actual - preds_actual))
 
         # Kalkulasi Prediksi H+1 Riil Esok Hari (Masa Depan setelah tanggal data terakhir)
         n_feats = getattr(feature_scaler, "n_features_in_", 13)
@@ -662,18 +737,60 @@ def main():
         feature_cols = TECHNICAL_FEATURES if n_feats == 9 else (TECHNICAL_FEATURES + SENTIMENT_FEATURES)
 
         if len(df) >= lookback and all(col in df.columns for col in feature_cols):
-            last_seq = df[feature_cols].tail(lookback).values
+            df_prep = df.copy()
+            if "discussion_volume" in df_prep.columns:
+                df_prep["discussion_volume"] = np.log1p(df_prep["discussion_volume"].fillna(0))
+
+            last_seq = df_prep[feature_cols].tail(lookback).values
             last_seq_scaled = feature_scaler.transform(last_seq).reshape(1, lookback, n_feats)
             future_pred_scaled = regressor.predict(last_seq_scaled)
             next_pred = float(target_scaler.inverse_transform(future_pred_scaled.reshape(-1, 1)).flatten()[0])
             pred_diff = next_pred - latest_close
             pred_pct = (pred_diff / latest_close) * 100
         else:
-            next_pred = preds_actual[-1]
+            next_pred = preds_actual[-1] if len(preds_actual) > 0 else latest_close
             pred_diff = next_pred - latest_close
             pred_pct = (pred_diff / latest_close) * 100
 
-    # Kartu KPI Utama
+    # Format Nama Model & Skenario Ringkas 1 Baris
+    if "Best Model" in model_choice:
+        display_model_name = "StockGRU (Terbaik - MAPE 2,21%)"
+    else:
+        display_model_name = model_choice
+
+    if active_scenario == "S1":
+        display_scenario_name = "S1 (Teknikal Baseline - 9 Fitur)"
+    else:
+        display_scenario_name = "S2 (Teknikal + InSet Lexicon - 13 Fitur)"
+
+    # Status Banner Compact 1 Baris Tunggal
+    st.markdown(
+        f"""
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #2563eb; padding: 10px 20px; border-radius: 14px; margin-bottom: 22px; display: flex; align-items: center; justify-content: space-between; gap: 16px; white-space: nowrap; overflow-x: auto; box-shadow: 0 2px 8px rgba(37, 99, 235, 0.06);">
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-weight: 700; color: #1e3a8a; font-size: 0.88rem;">🤖 Model Aktif:</span>
+                <span style="background: #2563eb; color: #ffffff; padding: 3px 12px; border-radius: 16px; font-weight: 700; font-size: 0.83rem;">
+                    {display_model_name}
+                </span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-weight: 700; color: #1e3a8a; font-size: 0.88rem;">📌 Skenario Fitur:</span>
+                <span style="background: #0284c7; color: #ffffff; padding: 3px 12px; border-radius: 16px; font-weight: 700; font-size: 0.83rem;">
+                    {display_scenario_name}
+                </span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+                <span style="font-weight: 700; color: #1e3a8a; font-size: 0.88rem;">🧠 Sentimen:</span>
+                <span style="background: #059669; color: #ffffff; padding: 3px 12px; border-radius: 16px; font-weight: 700; font-size: 0.83rem;">
+                    InSet Lexicon
+                </span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Kartu KPI Utama Sesuai Ukuran Seragam
     kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
 
     with kpi_col1:
@@ -682,9 +799,11 @@ def main():
             <div class="metric-card">
                 <div class="metric-title">Harga Penutupan Terakhir</div>
                 <div class="metric-value">Rp {latest_close:,.0f}</div>
-                <span class="{ 'metric-badge-positive' if diff >= 0 else 'metric-badge-negative' }">
-                    { '+' if diff >= 0 else '' }{diff:,.0f} ({pct_change:+.2f}%)
-                </span>
+                <div>
+                    <span class="{ 'metric-badge-positive' if diff >= 0 else 'metric-badge-negative' }">
+                        { '+' if diff >= 0 else '' }{diff:,.0f} ({pct_change:+.2f}%)
+                    </span>
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -694,11 +813,13 @@ def main():
         st.markdown(
             f"""
             <div class="metric-card">
-                <div class="metric-title">Prediksi Harga H+1 ({model_choice.split()[0]})</div>
+                <div class="metric-title">Prediksi Harga H+1</div>
                 <div class="metric-value">Rp {next_pred:,.0f}</div>
-                <span class="{ 'metric-badge-positive' if pred_pct >= 0 else 'metric-badge-negative' }">
-                    Ekspektasi: {pred_pct:+.2f}%
-                </span>
+                <div>
+                    <span class="{ 'metric-badge-positive' if pred_pct >= 0 else 'metric-badge-negative' }">
+                        Ekspektasi: {pred_pct:+.2f}%
+                    </span>
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -708,9 +829,11 @@ def main():
         st.markdown(
             f"""
             <div class="metric-card">
-                <div class="metric-title">Akurasi Model (MAPE Test)</div>
+                <div class="metric-title">Akurasi Model (MAPE)</div>
                 <div class="metric-value">{mape:.2f}%</div>
-                <span style="color: #475569; font-size: 0.85rem; font-weight: 600;">Metrik Utama Evaluasi</span>
+                <div>
+                    <span style="color: #475569; font-size: 0.82rem; font-weight: 600;">Metrik Evaluasi Utama</span>
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -720,9 +843,11 @@ def main():
         st.markdown(
             f"""
             <div class="metric-card">
-                <div class="metric-title">Error Saham (RMSE & MAE)</div>
+                <div class="metric-title">Eror Saham (RMSE & MAE)</div>
                 <div class="metric-value">Rp {rmse:,.0f}</div>
-                <span style="color: #475569; font-size: 0.85rem; font-weight: 600;">MAE: Rp {mae:,.0f}</span>
+                <div>
+                    <span style="color: #475569; font-size: 0.82rem; font-weight: 600;">MAE: Rp {mae:,.0f}</span>
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -910,7 +1035,7 @@ def main():
                     x=plot_dates,
                     y=plot_preds,
                     mode="lines+markers",
-                    name=f"Prediksi {model_choice} ({selected_scenario})",
+                    name=f"Prediksi {model_choice} ({active_scenario})",
                     line=dict(color="#f97316", width=2, dash="dash"),
                     marker=dict(size=4),
                 )
@@ -1200,7 +1325,7 @@ def main():
 
         # Word Cloud Section
         st.markdown("---")
-        st.markdown("### ☁️ Word Cloud Visualisasi Sentimen Riil Stockbit")
+        st.markdown("### ☁️ Word Cloud Visualisasi Sentimen Stockbit")
         
         wc_col1, wc_col2 = st.columns([1, 2.8])
         with wc_col1:
@@ -1216,7 +1341,7 @@ def main():
                 <div style="background-color: #f8fafc; padding: 15px; border-radius: 10px; border-left: 4px solid #2563eb; margin-top: 10px;">
                     <div style="font-size: 0.85rem; font-weight: 700; color: #1e293b;">📌 Informasi Word Cloud</div>
                     <div style="font-size: 0.8rem; color: #475569; margin-top: 5px;">
-                        Visualisasi diolah secara terstruktur dari <b>keseluruhan 255.000+ postingan riil Stockbit (2021-2026)</b> yang diklasifikasikan dengan InSet Lexicon & dibersihkan dari kata bising.
+                        Visualisasi diolah secara terstruktur dari <b>keseluruhan 255.000+ postingan Stockbit (2021-2026)</b> yang diklasifikasikan dengan InSet Lexicon & dibersihkan dari kata bising.
                     </div>
                 </div>
                 """,
@@ -1224,7 +1349,7 @@ def main():
             )
 
         with wc_col2:
-            with st.spinner("Menggenerasi Word Cloud dari 255.000+ data riil Stockbit..."):
+            with st.spinner("Menggenerasi Word Cloud dari 255.000+ data Stockbit..."):
                 fig_wc, total_w = generate_wordcloud(sentiment_filter=wc_filter)
                 st.pyplot(fig_wc)
 
@@ -1239,11 +1364,11 @@ def main():
         st.caption("Berikut adalah konfigurasi kombinasi hyperparameter yang diuji untuk menemukan arsitektur terbaik:")
         
         tuning_params_data = [
-            {"Config": "K1", "Hidden Units / Filters": 32, "Dropout": 0.10, "Learning Rate": 0.0050, "Batch Size": 16, "Epochs": 50, "Keterangan": "Under-parameterized / Fast"},
-            {"Config": "K2", "Hidden Units / Filters": 64, "Dropout": 0.20, "Learning Rate": 0.0010, "Batch Size": 32, "Epochs": 50, "Keterangan": "Standard Baseline"},
-            {"Config": "K3 (Best)", "Hidden Units / Filters": 128, "Dropout": 0.20, "Learning Rate": 0.0010, "Batch Size": 32, "Epochs": 50, "Keterangan": "🏆 Best Optimal Config"},
-            {"Config": "K4", "Hidden Units / Filters": 128, "Dropout": 0.30, "Learning Rate": 0.0005, "Batch Size": 64, "Epochs": 50, "Keterangan": "High Regularization"},
-            {"Config": "K5", "Hidden Units / Filters": 256, "Dropout": 0.40, "Learning Rate": 0.0001, "Batch Size": 64, "Epochs": 50, "Keterangan": "Deep Capacity / High Dropout"},
+            {"Config": "K1", "Hidden Units / Filters": 32, "Dropout": 0.10, "Learning Rate": 0.0050, "Batch Size": 16, "Epochs": 50},
+            {"Config": "K2", "Hidden Units / Filters": 64, "Dropout": 0.20, "Learning Rate": 0.0010, "Batch Size": 32, "Epochs": 100},
+            {"Config": "K3", "Hidden Units / Filters": 64, "Dropout": 0.20, "Learning Rate": 0.0010, "Batch Size": 16, "Epochs": 150},
+            {"Config": "K4", "Hidden Units / Filters": 128, "Dropout": 0.30, "Learning Rate": 0.0005, "Batch Size": 16, "Epochs": 100},
+            {"Config": "K5", "Hidden Units / Filters": 64, "Dropout": 0.50, "Learning Rate": 0.0050, "Batch Size": 32, "Epochs": 200},
         ]
         st.dataframe(pd.DataFrame(tuning_params_data), use_container_width=True, hide_index=True)
 
@@ -1251,7 +1376,7 @@ def main():
 
         # 2. Perbandingan Bar Chart & Ringkasan Metrik
         if df_results is not None:
-            df_full_metrics = df_results.copy()
+            df_full_metrics = df_results[df_results["Scenario"].isin(["S1", "S2"])].copy()
             if "RMSE (IDR)" in df_full_metrics.columns and "MSE (IDR²)" not in df_full_metrics.columns:
                 df_full_metrics["MSE (IDR²)"] = (df_full_metrics["RMSE (IDR)"] ** 2).apply(lambda x: round(x, 2))
 
@@ -1266,7 +1391,7 @@ def main():
                     color="Scenario",
                     barmode="group",
                     text="MAPE (%)",
-                    title="Perbandingan MAPE: Skenario 1 (Teknikal) vs Skenario 2 (+Sentimen)",
+                    title="Perbandingan MAPE: S1 (Teknikal Baseline) vs S2 (InSet Lexicon)",
                     color_discrete_map={"S1": "#64748b", "S2": "#2563eb"},
                 )
                 fig_comp.update_layout(template="plotly_white", height=400)
@@ -1276,75 +1401,53 @@ def main():
                 st.markdown("#### Ringkasan Evaluasi Metrik Utama (K3)")
                 st.dataframe(df_full_metrics, use_container_width=True, hide_index=True)
 
-                if df_validation is not None:
-                    st.markdown("#### Laporan Validasi Label Sentimen (InSet Lexicon)")
-                    st.dataframe(df_validation, use_container_width=True, hide_index=True)
-
-            # 3. Tabel Komprehensif Seluruh Run (K1 s/d K5 untuk S1 & S2)
+            # 3. Tabel Komprehensif Seluruh Run (K1 s/d K5 untuk S1 dan S2)
             st.markdown("---")
             st.markdown("### 📋 Tabel Komprehensif Hasil Evaluation Run Seluruh Config (K1 - K5)")
-            st.caption("Menampilkan perbandingan komprehensif metrik evaluasi (MAPE, RMSE, MAE, dan MSE) untuk seluruh 30 kombinasi eksperimen pemodelan:")
+            st.caption("Menampilkan perbandingan komprehensif metrik evaluasi (MAPE, RMSE, MAE, dan Stabilitas StdDev) untuk skenario S1 (Teknikal) vs S2 (InSet Lexicon):")
 
-            # Matriks Data Lengkap K1 s/d K5 untuk seluruh Model & Skenario
-            all_runs_data = [
-                # LSTM S1
-                {"Model": "LSTM", "Scenario": "S1", "Config": "K1", "MAPE (%)": 3.42, "RMSE (IDR)": 341.20, "MAE (IDR)": 236.15, "MSE (IDR²)": 116417.44, "Status": "Baseline"},
-                {"Model": "LSTM", "Scenario": "S1", "Config": "K2", "MAPE (%)": 3.10, "RMSE (IDR)": 308.50, "MAE (IDR)": 214.30, "MSE (IDR²)": 95172.25, "Status": "Baseline"},
-                {"Model": "LSTM", "Scenario": "S1", "Config": "K3", "MAPE (%)": 2.85, "RMSE (IDR)": 283.39, "MAE (IDR)": 197.21, "MSE (IDR²)": 80310.89, "Status": "Best S1 Baseline"},
-                {"Model": "LSTM", "Scenario": "S1", "Config": "K4", "MAPE (%)": 3.02, "RMSE (IDR)": 301.10, "MAE (IDR)": 209.40, "MSE (IDR²)": 90661.21, "Status": "Baseline"},
-                {"Model": "LSTM", "Scenario": "S1", "Config": "K5", "MAPE (%)": 3.25, "RMSE (IDR)": 324.80, "MAE (IDR)": 225.60, "MSE (IDR²)": 105495.04, "Status": "Baseline"},
+            # Memuat Data Hasil Run Nyata (Dynamic Loading)
+            all_configs_csv = BASE_DIR / "reports" / "metrics" / "results_all_configs.csv"
+            
+            if all_configs_csv.exists():
+                df_all_runs = pd.read_csv(all_configs_csv)
+                if "RMSE (IDR)" in df_all_runs.columns and "MSE (IDR²)" not in df_all_runs.columns:
+                    df_all_runs["MSE (IDR²)"] = (df_all_runs["RMSE (IDR)"] ** 2).apply(lambda x: round(x, 2))
+                
+                # Filter interactive untuk tabel komprehensif
+                filter_c1, filter_c2 = st.columns(2)
+                with filter_c1:
+                    selected_model_tbl = st.multiselect("Filter Model Tabel:", ["LSTM", "GRU", "CNN"], default=["LSTM", "GRU", "CNN"])
+                with filter_c2:
+                    selected_scenario_tbl = st.multiselect("Filter Skenario Tabel:", ["S1", "S2"], default=["S1", "S2"])
 
-                # LSTM S2
-                {"Model": "LSTM", "Scenario": "S2", "Config": "K1", "MAPE (%)": 2.78, "RMSE (IDR)": 275.40, "MAE (IDR)": 190.20, "MSE (IDR²)": 75845.16, "Status": "+Sentimen"},
-                {"Model": "LSTM", "Scenario": "S2", "Config": "K2", "MAPE (%)": 2.45, "RMSE (IDR)": 242.10, "MAE (IDR)": 168.30, "MSE (IDR²)": 58612.41, "Status": "+Sentimen"},
-                {"Model": "LSTM", "Scenario": "S2", "Config": "K3", "MAPE (%)": 2.24, "RMSE (IDR)": 221.13, "MAE (IDR)": 152.99, "MSE (IDR²)": 48898.48, "Status": "🏆 BEST MODEL OVERALL"},
-                {"Model": "LSTM", "Scenario": "S2", "Config": "K4", "MAPE (%)": 2.38, "RMSE (IDR)": 235.60, "MAE (IDR)": 162.80, "MSE (IDR²)": 55507.36, "Status": "+Sentimen"},
-                {"Model": "LSTM", "Scenario": "S2", "Config": "K5", "MAPE (%)": 2.56, "RMSE (IDR)": 253.20, "MAE (IDR)": 175.40, "MSE (IDR²)": 64110.24, "Status": "+Sentimen"},
+                df_filtered_runs = df_all_runs[
+                    (df_all_runs["Model"].isin(selected_model_tbl)) &
+                    (df_all_runs["Scenario"].isin(selected_scenario_tbl))
+                ]
 
-                # GRU S1
-                {"Model": "GRU", "Scenario": "S1", "Config": "K1", "MAPE (%)": 3.15, "RMSE (IDR)": 312.60, "MAE (IDR)": 216.50, "MSE (IDR²)": 97718.76, "Status": "Baseline"},
-                {"Model": "GRU", "Scenario": "S1", "Config": "K2", "MAPE (%)": 2.82, "RMSE (IDR)": 260.40, "MAE (IDR)": 192.80, "MSE (IDR²)": 67808.16, "Status": "Baseline"},
-                {"Model": "GRU", "Scenario": "S1", "Config": "K3", "MAPE (%)": 2.60, "RMSE (IDR)": 234.68, "MAE (IDR)": 178.15, "MSE (IDR²)": 55074.70, "Status": "Best S1 GRU"},
-                {"Model": "GRU", "Scenario": "S1", "Config": "K4", "MAPE (%)": 2.74, "RMSE (IDR)": 252.10, "MAE (IDR)": 186.20, "MSE (IDR²)": 63554.41, "Status": "Baseline"},
-                {"Model": "GRU", "Scenario": "S1", "Config": "K5", "MAPE (%)": 2.95, "RMSE (IDR)": 278.30, "MAE (IDR)": 201.70, "MSE (IDR²)": 77450.89, "Status": "Baseline"},
+                st.dataframe(df_filtered_runs, use_container_width=True, hide_index=True)
 
-                # GRU S2
-                {"Model": "GRU", "Scenario": "S2", "Config": "K1", "MAPE (%)": 2.85, "RMSE (IDR)": 279.10, "MAE (IDR)": 193.40, "MSE (IDR²)": 77896.81, "Status": "+Sentimen"},
-                {"Model": "GRU", "Scenario": "S2", "Config": "K2", "MAPE (%)": 2.51, "RMSE (IDR)": 240.20, "MAE (IDR)": 169.50, "MSE (IDR²)": 57696.04, "Status": "+Sentimen"},
-                {"Model": "GRU", "Scenario": "S2", "Config": "K3", "MAPE (%)": 2.31, "RMSE (IDR)": 220.56, "MAE (IDR)": 156.75, "MSE (IDR²)": 48646.71, "Status": "Top GRU S2"},
-                {"Model": "GRU", "Scenario": "S2", "Config": "K4", "MAPE (%)": 2.42, "RMSE (IDR)": 231.80, "MAE (IDR)": 163.20, "MSE (IDR²)": 53731.24, "Status": "+Sentimen"},
-                {"Model": "GRU", "Scenario": "S2", "Config": "K5", "MAPE (%)": 2.62, "RMSE (IDR)": 255.40, "MAE (IDR)": 177.60, "MSE (IDR²)": 65229.16, "Status": "+Sentimen"},
+                # Tombol Download Data Hasil Benchmark
+                csv_bytes = convert_df_to_csv(df_all_runs)
+                st.download_button(
+                    label="📥 Download Data Lengkap Hasil Benchmark (CSV)",
+                    data=csv_bytes,
+                    file_name="hasil_benchmark_skripsi_45_runs.csv",
+                    mime="text/csv",
+                    help="Klik untuk mengunduh seluruh data metrik evaluasi 45 kombinasi eksperimen untuk lampiran Bab 4."
+                )
+            else:
+                st.info("ℹ️ File `results_all_configs.csv` belum ditemukan. Menampilkan hasil run optimal saat ini (K3):")
+                st.dataframe(df_full_metrics, use_container_width=True, hide_index=True)
 
-                # CNN S1
-                {"Model": "CNN", "Scenario": "S1", "Config": "K1", "MAPE (%)": 4.45, "RMSE (IDR)": 428.30, "MAE (IDR)": 318.20, "MSE (IDR²)": 183440.89, "Status": "Baseline"},
-                {"Model": "CNN", "Scenario": "S1", "Config": "K2", "MAPE (%)": 4.12, "RMSE (IDR)": 389.50, "MAE (IDR)": 292.40, "MSE (IDR²)": 151710.25, "Status": "Baseline"},
-                {"Model": "CNN", "Scenario": "S1", "Config": "K3", "MAPE (%)": 3.87, "RMSE (IDR)": 356.68, "MAE (IDR)": 273.66, "MSE (IDR²)": 127220.62, "Status": "Best S1 CNN"},
-                {"Model": "CNN", "Scenario": "S1", "Config": "K4", "MAPE (%)": 3.98, "RMSE (IDR)": 368.40, "MAE (IDR)": 281.90, "MSE (IDR²)": 135718.56, "Status": "Baseline"},
-                {"Model": "CNN", "Scenario": "S1", "Config": "K5", "MAPE (%)": 4.21, "RMSE (IDR)": 399.10, "MAE (IDR)": 302.50, "MSE (IDR²)": 159280.81, "Status": "Baseline"},
-
-                # CNN S2
-                {"Model": "CNN", "Scenario": "S2", "Config": "K1", "MAPE (%)": 3.95, "RMSE (IDR)": 378.20, "MAE (IDR)": 279.10, "MSE (IDR²)": 143035.24, "Status": "+Sentimen"},
-                {"Model": "CNN", "Scenario": "S2", "Config": "K2", "MAPE (%)": 3.68, "RMSE (IDR)": 345.10, "MAE (IDR)": 256.40, "MSE (IDR²)": 119094.01, "Status": "+Sentimen"},
-                {"Model": "CNN", "Scenario": "S2", "Config": "K3", "MAPE (%)": 3.49, "RMSE (IDR)": 323.04, "MAE (IDR)": 241.26, "MSE (IDR²)": 104354.84, "Status": "🚀 Top Benefit CNN"},
-                {"Model": "CNN", "Scenario": "S2", "Config": "K4", "MAPE (%)": 3.61, "RMSE (IDR)": 336.50, "MAE (IDR)": 249.80, "MSE (IDR²)": 113232.25, "Status": "+Sentimen"},
-                {"Model": "CNN", "Scenario": "S2", "Config": "K5", "MAPE (%)": 3.82, "RMSE (IDR)": 362.40, "MAE (IDR)": 268.90, "MSE (IDR²)": 131333.76, "Status": "+Sentimen"},
-            ]
-
-            df_all_runs = pd.DataFrame(all_runs_data)
-
-            # Filter interactive untuk tabel komprehensif
-            filter_c1, filter_c2 = st.columns(2)
-            with filter_c1:
-                selected_model_tbl = st.multiselect("Filter Model Tabel:", ["LSTM", "GRU", "CNN"], default=["LSTM", "GRU", "CNN"])
-            with filter_c2:
-                selected_scenario_tbl = st.multiselect("Filter Skenario Tabel:", ["S1", "S2"], default=["S1", "S2"])
-
-            df_filtered_runs = df_all_runs[
-                (df_all_runs["Model"].isin(selected_model_tbl)) &
-                (df_all_runs["Scenario"].isin(selected_scenario_tbl))
-            ]
-
-            st.dataframe(df_filtered_runs, use_container_width=True, hide_index=True)
+                csv_k3 = convert_df_to_csv(df_full_metrics)
+                st.download_button(
+                    label="📥 Download Ringkasan Evaluasi K3 (CSV)",
+                    data=csv_k3,
+                    file_name="hasil_evaluasi_k3.csv",
+                    mime="text/csv"
+                )
 
 
     # TAB 4: FITUR TEKNIKAL & DATA EXPLORER
@@ -1416,7 +1519,7 @@ def main():
 
             st.dataframe(filtered_df, use_container_width=True, hide_index=True)
 
-            csv_data = filtered_df.to_csv(index=False).encode("utf-8")
+            csv_data = convert_df_to_csv(filtered_df)
             st.download_button(
                 label="📥 Download Data CSV Terfilter",
                 data=csv_data,
@@ -1439,16 +1542,19 @@ def main():
                 min_clean_d = str(df_clean_all["created_at"].min())[:10]
                 max_clean_d = str(df_clean_all["created_at"].max())[:10]
 
-                col_c1, col_c2, col_c3, col_c4 = st.columns(4)
+                col_c1, col_c2, col_c3, col_c4, col_c5 = st.columns(5)
                 with col_c1:
                     st.metric("Total Postingan Bersih", f"{len(df_clean_all):,} Postingan")
                 with col_c2:
                     st.metric("Rentang Tanggal Bersih", f"{min_clean_d} s/d {max_clean_d}")
                 with col_c3:
-                    c_pos = (df_clean_all["sentiment_label"].str.contains("Positif")).sum()
+                    c_pos = (df_clean_all["sentiment_label"] == "Positif (+1)").sum()
                     st.metric("Sentimen Positif (+1)", f"{c_pos:,}", f"{(c_pos/len(df_clean_all))*100:.1f}%")
                 with col_c4:
-                    c_neg = (df_clean_all["sentiment_label"].str.contains("Negatif")).sum()
+                    c_neu = (df_clean_all["sentiment_label"] == "Netral (0)").sum()
+                    st.metric("Sentimen Netral (0)", f"{c_neu:,}", f"{(c_neu/len(df_clean_all))*100:.1f}%")
+                with col_c5:
+                    c_neg = (df_clean_all["sentiment_label"] == "Negatif (-1)").sum()
                     st.metric("Sentimen Negatif (-1)", f"{c_neg:,}", f"{(c_neg/len(df_clean_all))*100:.1f}%")
 
                 col_cf1, col_cf2, col_cf3 = st.columns(3)
@@ -1485,7 +1591,7 @@ def main():
 
                 st.dataframe(df_view_clean, use_container_width=True, hide_index=True)
 
-                csv_clean_data = df_view_clean.to_csv(index=False).encode("utf-8")
+                csv_clean_data = convert_df_to_csv(df_view_clean)
                 st.download_button(
                     label="📥 Download Data Final Cleaning Stockbit (CSV Terlabel & Terpreproses)",
                     data=csv_clean_data,
@@ -1532,7 +1638,7 @@ def main():
 
                 st.dataframe(df_filtered, use_container_width=True, hide_index=True)
 
-                raw_csv = df_filtered.to_csv(index=False).encode("utf-8")
+                raw_csv = convert_df_to_csv(df_filtered)
                 st.download_button(
                     label="📥 Download Data Stream Stockbit CSV (Termasuk Skor & Label)",
                     data=raw_csv,

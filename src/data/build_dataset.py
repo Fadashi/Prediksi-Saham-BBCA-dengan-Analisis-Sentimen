@@ -36,7 +36,12 @@ def build_final_dataset(
     df_price = calculate_technical_indicators(df_price)
 
     if not sentiment_file.exists():
-        aggregate_daily_sentiment(output_file=sentiment_file)
+        if "indobert" in str(sentiment_file).lower():
+            from src.sentiment.aggregate_indobert import aggregate_indobert_sentiment
+            aggregate_indobert_sentiment(output_daily_file=sentiment_file)
+        else:
+            aggregate_daily_sentiment(output_file=sentiment_file)
+            
     df_sentiment = pd.read_csv(sentiment_file)
 
     df_price["Date"] = pd.to_datetime(df_price["Date"]).dt.strftime("%Y-%m-%d")
@@ -55,10 +60,8 @@ def build_final_dataset(
     for sent_col in ["sentiment_score", "positive_ratio", "negative_ratio"]:
         merged_df[sent_col] = merged_df[sent_col].ffill().bfill().fillna(0.0)
 
-    # Handling Outlier Volume Diskusi (Log1p Transformation agar tidak merusak MinMaxScaler)
-    merged_df["discussion_volume"] = merged_df["discussion_volume"].fillna(0)
-    merged_df["discussion_volume"] = np.log1p(merged_df["discussion_volume"])
-
+    # Volume Diskusi Riil (Jumlah Postingan Riil per Hari)
+    merged_df["discussion_volume"] = merged_df["discussion_volume"].fillna(0).astype(int)
 
     # Target: Harga Penutupan H+1
     merged_df["Target"] = merged_df["Close"].shift(-1)
@@ -74,6 +77,22 @@ def build_final_dataset(
     return merged_df
 
 
+def build_all_final_datasets():
+    """Membuat dataset_final.csv (InSet Lexicon) dan dataset_final_indobert.csv (IndoBERT)."""
+    print("[Build All Datasets] Creating dataset_final.csv (InSet Lexicon)...")
+    build_final_dataset(
+        sentiment_file=INTERIM_DATA_DIR / "daily_sentiment.csv",
+        output_file=PROCESSED_DATA_DIR / "dataset_final.csv"
+    )
+    
+    print("[Build All Datasets] Creating dataset_final_indobert.csv (IndoBERT)...")
+    build_final_dataset(
+        sentiment_file=INTERIM_DATA_DIR / "daily_sentiment_indobert.csv",
+        output_file=PROCESSED_DATA_DIR / "dataset_final_indobert.csv"
+    )
+
+
 if __name__ == "__main__":
     set_seed(CONFIG["seed"])
-    build_final_dataset()
+    build_all_final_datasets()
+
