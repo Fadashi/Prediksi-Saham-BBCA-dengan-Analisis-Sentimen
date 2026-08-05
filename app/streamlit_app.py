@@ -318,6 +318,98 @@ CUSTOM_CSS = """
         border-radius: 12px !important;
         border-color: #cbd5e1 !important;
     }
+
+    /* =========================================================
+       RESPONSIVE MOBILE STYLES (Smartphones & Tablets < 768px)
+       ========================================================= */
+    @media (max-width: 768px) {
+        .block-container {
+            padding-top: 1rem !important;
+            padding-bottom: 2rem !important;
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+        }
+
+        /* Header Header Responsif */
+        .main-header {
+            padding: 20px 18px !important;
+            border-radius: 18px !important;
+            margin-bottom: 16px !important;
+        }
+
+        .main-header h1 {
+            font-size: 1.4rem !important;
+            line-height: 1.35 !important;
+        }
+
+        .main-header p {
+            font-size: 0.88rem !important;
+            line-height: 1.4 !important;
+        }
+
+        .header-chip {
+            font-size: 0.78rem !important;
+            padding: 5px 12px !important;
+            width: 100% !important;
+            box-sizing: border-border-box !important;
+            display: block !important;
+            text-align: center !important;
+        }
+
+        /* Status Banner Responsif Smartphone */
+        .status-banner-container {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 8px !important;
+            white-space: normal !important;
+            padding: 12px 14px !important;
+            border-radius: 12px !important;
+        }
+
+        .status-banner-container > div {
+            width: 100% !important;
+            justify-content: space-between !important;
+        }
+
+        /* Metric Cards Stack & Scaling */
+        .metric-card {
+            min-height: 135px !important;
+            height: auto !important;
+            padding: 15px 16px !important;
+            margin-bottom: 10px !important;
+            border-radius: 16px !important;
+        }
+
+        .metric-value {
+            font-size: 1.55rem !important;
+        }
+
+        .metric-title {
+            font-size: 0.76rem !important;
+        }
+
+        /* Tabs Scrollable Mobile */
+        .stTabs [data-baseweb="tab-list"] {
+            overflow-x: auto !important;
+            white-space: nowrap !important;
+            flex-wrap: nowrap !important;
+            padding: 4px !important;
+            border-radius: 12px !important;
+        }
+
+        .stTabs [data-baseweb="tab"] {
+            padding: 8px 14px !important;
+            font-size: 0.82rem !important;
+            flex-shrink: 0 !important;
+        }
+
+        /* Horizontal Slider Mobile Card Width */
+        .post-slide-card {
+            flex: 0 0 260px !important;
+            min-width: 260px !important;
+            padding: 14px !important;
+        }
+    }
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -766,7 +858,7 @@ def main():
     # Status Banner Compact 1 Baris Tunggal
     st.markdown(
         f"""
-        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #2563eb; padding: 10px 20px; border-radius: 14px; margin-bottom: 22px; display: flex; align-items: center; justify-content: space-between; gap: 16px; white-space: nowrap; overflow-x: auto; box-shadow: 0 2px 8px rgba(37, 99, 235, 0.06);">
+        <div class="status-banner-container" style="background: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #2563eb; padding: 10px 20px; border-radius: 14px; margin-bottom: 22px; display: flex; align-items: center; justify-content: space-between; gap: 16px; white-space: nowrap; overflow-x: auto; box-shadow: 0 2px 8px rgba(37, 99, 235, 0.06);">
             <div style="display: flex; align-items: center; gap: 6px;">
                 <span style="font-weight: 700; color: #1e3a8a; font-size: 0.88rem;">🤖 Model Aktif:</span>
                 <span style="background: #2563eb; color: #ffffff; padding: 3px 12px; border-radius: 16px; font-weight: 700; font-size: 0.83rem;">
