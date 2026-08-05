@@ -760,7 +760,7 @@ def main():
         help="S1: Hanya Indikator Teknikal\nS2: Teknikal + Sentimen InSet Lexicon"
     )
 
-    lookback = st.sidebar.slider("Window Timestep (Hari)", 10, 60, 30, step=5)
+    lookback = 30
     
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 📌 Detail Skenario Eksperimen")
