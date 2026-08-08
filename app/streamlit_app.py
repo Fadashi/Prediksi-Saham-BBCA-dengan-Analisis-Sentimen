@@ -23,6 +23,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
 import torch
+torch.set_num_threads(1)
 from wordcloud import WordCloud
 
 # Pastikan path root terdaftar
@@ -451,9 +452,13 @@ def load_stream_posts():
     gz_path = RAW_DATA_DIR / "stream_bbca.jsonl.gz"
     stream_path = RAW_DATA_DIR / "stream_bbca.jsonl"
     posts = []
+    max_posts = 10000  # Membatasi memori agar tidak crash (OOM) di Streamlit Cloud
+    
     if gz_path.exists():
         with gzip.open(gz_path, "rt", encoding="utf-8") as f:
             for line in f:
+                if len(posts) >= max_posts:
+                    break
                 if line.strip():
                     try:
                         posts.append(json.loads(line))
@@ -462,6 +467,8 @@ def load_stream_posts():
     elif stream_path.exists():
         with open(stream_path, "r", encoding="utf-8") as f:
             for line in f:
+                if len(posts) >= max_posts:
+                    break
                 if line.strip():
                     try:
                         posts.append(json.loads(line))
