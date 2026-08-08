@@ -452,7 +452,9 @@ def load_stream_posts():
     gz_path = RAW_DATA_DIR / "stream_bbca.jsonl.gz"
     stream_path = RAW_DATA_DIR / "stream_bbca.jsonl"
     posts = []
-    max_posts = 10000  # Membatasi memori agar tidak crash (OOM) di Streamlit Cloud
+    import os
+    # Deteksi otomatis: Jika dijalankan di Windows (Lokal), jangan batasi. Jika di Linux (Streamlit Cloud), batasi 10.000
+    max_posts = float("inf") if os.name == 'nt' else 10000  
     
     if gz_path.exists():
         with gzip.open(gz_path, "rt", encoding="utf-8") as f:
